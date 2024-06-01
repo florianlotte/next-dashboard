@@ -1,4 +1,4 @@
-import { sql } from '@vercel/postgres';
+import { Pool, QueryResultRow } from 'pg';
 import {
   CustomerField,
   CustomersTableType,
@@ -9,6 +9,47 @@ import {
   Revenue,
 } from './definitions';
 import { formatCurrency } from './utils';
+
+const pool = new Pool({ connectionString: process.env.POSTGRES_URL });
+
+type Primitive = string | number | boolean | undefined | null;
+
+function sqlTemplate(
+    strings: TemplateStringsArray,
+    ...values: Primitive[]
+): [string, Primitive[]] {
+  if (!isTemplateStringsArray(strings) || !Array.isArray(values)) {
+    throw new Error(
+        'It looks like you tried to call `sql` as a function. Make sure to use it as a tagged template.\n' +
+        "\tExample: sql`SELECT * FROM users`, not sql('SELECT * FROM users')",
+    );
+  }
+
+  let result = strings[0] ?? '';
+
+  for (let i = 1; i < strings.length; i++) {
+    result += `$${i}${strings[i] ?? ''}`;
+  }
+
+  return [result, values];
+}
+
+function isTemplateStringsArray(
+    strings: unknown,
+): strings is TemplateStringsArray {
+  return (
+      Array.isArray(strings) && 'raw' in strings && Array.isArray(strings.raw)
+  );
+}
+
+export async function sql<O extends QueryResultRow>(
+    strings: TemplateStringsArray,
+    ...values: Primitive[]
+) {
+  const [query, params] = sqlTemplate(strings, ...values);
+
+  return pool.query<O>(query, params);
+}
 
 export async function fetchRevenue() {
   // Add noStore() here to prevent the response from being cached.
@@ -222,8 +263,8 @@ export async function fetchFilteredCustomers(query: string) {
 
 export async function getUser(email: string) {
   try {
-    const user = await sql`SELECT * FROM users WHERE email=${email}`;
-    return user.rows[0] as User;
+    const user = await sql<User>`SELECT * FROM users WHERE email=${email}`;
+    return user.rows[0];
   } catch (error) {
     console.error('Failed to fetch user:', error);
     throw new Error('Failed to fetch user.');
