@@ -43,7 +43,7 @@ function isTemplateStringsArray(
   );
 }
 
-async function sql<O extends QueryResultRow>(
+export async function sql<O extends QueryResultRow>(
   strings: TemplateStringsArray,
   ...values: Primitive[]
 ) {
